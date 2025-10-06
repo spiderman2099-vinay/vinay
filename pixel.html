@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Mosaic Generator</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for better handling of canvas */
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            background-color: #1f2937; /* Dark background */
+            border-radius: 12px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+            margin-top: 1rem;
+        }
+        /* Make canvases fluid within their container */
+        #sourceCanvas, #resultCanvas {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-4 sm:p-8 font-sans">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-red-500 mb-2">Pixel Identity Shifter</h1>
+            <p class="text-gray-400">Upload any image to use its colors to form the embedded spider logo.</p>
+        </header>
+
+        <!-- Image Upload Input -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
+            <label for="imageUpload" class="block text-lg font-medium text-gray-300 mb-3">
+                1. Upload Your Source Image:
+            </label>
+            <input type="file" id="imageUpload" accept="image/*" class="w-full text-sm text-gray-400
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-red-500 file:text-white
+                hover:file:bg-red-600 cursor-pointer
+            ">
+        </div>
+
+        <!-- Canvas Display Area -->
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Source Image Preview -->
+            <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold mb-3 text-center text-gray-300">2. Source Preview</h2>
+                <div class="canvas-container">
+                    <canvas id="sourceCanvas" class="rounded-lg max-w-full h-auto border-2 border-gray-700"></canvas>
+                </div>
+            </div>
+
+            <!-- Mosaic Result -->
+            <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold mb-3 text-center text-red-500">3. Final Mosaic (The Spider)</h2>
+                <div class="canvas-container">
+                    <!-- The resulting image is drawn here -->
+                    <canvas id="resultCanvas" class="rounded-lg max-w-full h-auto border-2 border-red-500"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden Canvas for the Target Mask (Spider Logo) -->
+        <div class="hidden">
+            <canvas id="targetCanvas"></canvas>
+        </div>
+        
+    </div>
+
+    <script>
+        console.log("Script starting...");
+
+        // --- Configuration ---
+        // The Base64 for the black spider on red background image.
+        const TARGET_IMAGE_BASE64 = "data:image/jpeg;base64,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-w==";
+
+        // Define the target canvas size (the aspect ratio of your logo is 1:1, so we use 500x500)
+        const CANVAS_SIZE = 500; 
+
+        // --- Canvas and Context Setup ---
+        const imageUpload = document.getElementById('imageUpload');
+        const sourceCanvas = document.getElementById('sourceCanvas');
+        const resultCanvas = document.getElementById('resultCanvas');
+        const targetCanvas = document.getElementById('targetCanvas'); // Hidden canvas for the mask
+
+        // Ensure we get 2D contexts
+        const ctxSource = sourceCanvas.getContext('2d');
+        const ctxResult = resultCanvas.getContext('2d');
+        const ctxTarget = targetCanvas.getContext('2d');
+
+        // Set dimensions for all canvases
+        sourceCanvas.width = sourceCanvas.height = CANVAS_SIZE;
+        resultCanvas.width = resultCanvas.height = CANVAS_SIZE;
+        targetCanvas.width = targetCanvas.height = CANVAS_SIZE;
+        
+        // Initial drawing of the target mask (only once)
+        loadTargetMask();
+
+        // --- Event Listener ---
+        imageUpload.addEventListener('change', handleImageUpload);
+
+        /**
+         * Loads the built-in Base64 image onto the hidden target canvas.
+         */
+        function loadTargetMask() {
+            const targetImg = new Image();
+            targetImg.onload = () => {
+                console.log("SUCCESS: Target mask (spider logo) loaded onto hidden canvas.");
+                // Draw the mask image, stretching it to fill the canvas
+                ctxTarget.drawImage(targetImg, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            };
+            targetImg.onerror = (error) => {
+                console.error("ERROR: Failed to load target mask image (Base64). Check image data integrity.", error);
+            };
+            targetImg.src = TARGET_IMAGE_BASE64;
+        }
+
+        /**
+         * Handles the file upload event.
+         * @param {Event} event 
+         */
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                console.warn("No file selected.");
+                return;
+            }
+
+            const reader = new FileReader();
+            
+            // Handle file reading success
+            reader.onload = (e) => {
+                const img = new Image();
+                
+                img.onload = () => {
+                    console.log("SUCCESS: Source image loaded from upload.");
+                    drawSourceImage(img);
+                    // Ensure mask is fully loaded and drawn before creating mosaic
+                    if (isTargetMaskReady()) {
+                        createMosaic();
+                    } else {
+                        // If not ready, wait a moment and try again
+                        setTimeout(createMosaic, 100); 
+                    }
+                };
+
+                img.onerror = (error) => {
+                    console.error("ERROR: Failed to load image data into HTMLImageElement. File might be corrupt or unsupported.", error);
+                };
+                
+                img.src = e.target.result;
+            };
+
+            // Handle file reading failure
+            reader.onerror = (error) => {
+                console.error("ERROR: Failed to read file from disk.", error);
+            };
+
+            // Start reading the file
+            reader.readAsDataURL(file);
+        }
+
+        /**
+         * Utility to check if the target mask canvas has valid pixel data.
+         */
+        function isTargetMaskReady() {
+            try {
+                // Check if any pixel data exists on the target canvas
+                const data = ctxTarget.getImageData(0, 0, 1, 1).data;
+                // If the first pixel's alpha channel is not 0 (meaning it was drawn)
+                return data[3] > 0; 
+            } catch (e) {
+                return false;
+            }
+        }
+
+
+        /**
+         * Draws the uploaded image onto the source canvas.
+         * @param {HTMLImageElement} img The uploaded image element.
+         */
+        function drawSourceImage(img) {
+            // Clear source canvas
+            ctxSource.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            // Draw the uploaded image, scaling it to fit the source canvas
+            ctxSource.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        }
+
+        /**
+         * The core function: reads pixels from the source image and maps them
+         * to the structure of the target mask.
+         */
+        function createMosaic() {
+            try {
+                // 1. Get pixel data from the Source (uploaded image)
+                const sourceData = ctxSource.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+                const sourcePixels = sourceData.data;
+
+                // 2. Get pixel data from the Target Mask (spider logo)
+                const targetData = ctxTarget.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+                const targetPixels = targetData.data;
+                
+                // Safety check
+                if (sourcePixels.length !== targetPixels.length || sourcePixels.length === 0) {
+                    console.error("ERROR: Pixel array length mismatch or zero length. Cannot generate mosaic.");
+                    return;
+                }
+                
+                console.log(`Mosaic generation in progress. Total pixels: ${sourcePixels.length / 4}`);
+
+                // 3. Create a new ImageData object for the result
+                const resultData = ctxResult.createImageData(CANVAS_SIZE, CANVAS_SIZE);
+                const resultPixels = resultData.data;
+
+                // --- NEW ROBUST MOSAIC LOGIC: Detect the bright RED background ---
+                // The red background is roughly R=179 (B3), G=34 (22), B=34 (22).
+                const RED_R_MIN = 150; // Minimum Red component
+                const RED_G_MAX = 80;  // Maximum Green component (should be low)
+                const RED_B_MAX = 80;  // Maximum Blue component (should be low)
+
+                for (let i = 0; i < sourcePixels.length; i += 4) {
+                    const r = targetPixels[i];
+                    const g = targetPixels[i + 1];
+                    const b = targetPixels[i + 2];
+                    
+                    // Check if the mask pixel is the RED background
+                    const isRedBackground = (
+                        r >= RED_R_MIN && 
+                        g <= RED_G_MAX &&
+                        b <= RED_B_MAX
+                    );
+
+                    if (isRedBackground) {
+                        // If it's the red background, make the result pixel transparent
+                        resultPixels[i] = 0;
+                        resultPixels[i + 1] = 0;
+                        resultPixels[i + 2] = 0;
+                        resultPixels[i + 3] = 0; // Fully transparent
+                    } else {
+                        // If it's NOT the red background (i.e., it's the black spider or dark noise), 
+                        // fill with the uploaded image's color
+                        resultPixels[i] = sourcePixels[i];         // R
+                        resultPixels[i + 1] = sourcePixels[i + 1]; // G
+                        resultPixels[i + 2] = sourcePixels[i + 2]; // B
+                        resultPixels[i + 3] = 255;                 // A (fully opaque)
+                    }
+                }
+
+                // 5. Put the new pixel data back onto the Result Canvas
+                ctxResult.putImageData(resultData, 0, 0);
+                console.log("SUCCESS: Mosaic generated and drawn to result canvas.");
+
+            } catch (error) {
+                // IMPORTANT: If this error shows up, please tell me the exact message.
+                console.error("A critical error occurred during mosaic generation. Possible security or timing issue:", error);
+            }
+        }
+
+    </script>
+
+</body>
+</html>
